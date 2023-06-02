@@ -19,6 +19,7 @@ package pspmigrator
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/strings/slices"
 	"strings"
 
 	"github.com/go-test/deep"
@@ -30,17 +31,24 @@ import (
 	psaadmission "k8s.io/pod-security-admission/admission"
 )
 
-func GetContainerSecurityContexts(podSpec *v1.PodSpec) []*v1.SecurityContext {
+func GetContainerSecurityContexts(podSpec *v1.PodSpec, containersToIgnore string) []*v1.SecurityContext {
 	// TODO reuse VisitContainers from k8s pkg/api/pod/util.go
 	scs := make([]*v1.SecurityContext, 0)
+	cti := strings.Split(containersToIgnore, ",")
 	for _, c := range podSpec.Containers {
-		scs = append(scs, c.SecurityContext)
+		if slices.Index(cti, c.Name) == -1 {
+			scs = append(scs, c.SecurityContext)
+		}
 	}
 	for _, c := range podSpec.InitContainers {
-		scs = append(scs, c.SecurityContext)
+		if slices.Index(cti, c.Name) == -1 {
+			scs = append(scs, c.SecurityContext)
+		}
 	}
 	for _, c := range podSpec.EphemeralContainers {
-		scs = append(scs, c.SecurityContext)
+		if slices.Index(cti, c.Name) == -1 {
+			scs = append(scs, c.SecurityContext)
+		}
 	}
 	return scs
 }
@@ -69,10 +77,14 @@ func FetchControllerObj(kind, name, namespace string, clientset *kubernetes.Clie
 	// for example, Deployments would fall under the ReplicaSet case so no need to have a case
 	// statement for Deployments.
 	switch kind {
-	case "ReplicaSet":
+	case "ReplicaSet": // deployments too
 		return clientset.AppsV1().ReplicaSets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	case "DaemonSet":
 		return clientset.AppsV1().DaemonSets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	case "Job": // cronjobs too
+		return clientset.BatchV1().Jobs(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	case "StatefulSet":
+		return clientset.AppsV1().StatefulSets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	default:
 		return nil, fmt.Errorf("unsupported controller kind %s", kind)
 	}
@@ -80,7 +92,7 @@ func FetchControllerObj(kind, name, namespace string, clientset *kubernetes.Clie
 
 // IsPodBeingMutatedByPSP returns whether a pod is likely mutated by a PSP object. It also returns the difference
 // of the securityContext attribute between the parent controller (e.g. Deployment) and the running pod.
-func IsPodBeingMutatedByPSP(pod *v1.Pod, clientset *kubernetes.Clientset) (mutating bool, diff []string, err error) {
+func IsPodBeingMutatedByPSP(pod *v1.Pod, clientset *kubernetes.Clientset, containersToIgnore string) (mutating bool, diff []string, err error) {
 	diff = make([]string, 0)
 	if len(pod.ObjectMeta.OwnerReferences) > 0 {
 		var owner metav1.OwnerReference
@@ -99,7 +111,7 @@ func IsPodBeingMutatedByPSP(pod *v1.Pod, clientset *kubernetes.Clientset) (mutat
 			return false, diff, err
 		}
 		// TODO investigate if 1st party library can be used such as github.com/google/go-cmp or smth from k8s
-		if diffNew := deep.Equal(GetContainerSecurityContexts(parentPodSpec), GetContainerSecurityContexts(&pod.Spec)); diffNew != nil {
+		if diffNew := deep.Equal(GetContainerSecurityContexts(parentPodSpec, ""), GetContainerSecurityContexts(&pod.Spec, containersToIgnore)); diffNew != nil {
 			diff = append(diff, diffNew...)
 		}
 		if diffNew := deep.Equal(parentPodSpec.SecurityContext, pod.Spec.SecurityContext); diffNew != nil {
