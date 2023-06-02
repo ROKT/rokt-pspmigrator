@@ -34,9 +34,10 @@ var RootCmd = &cobra.Command{
 }
 
 var (
-	clientset *kubernetes.Clientset
-	err       error
-	Namespace string
+	clientset          *kubernetes.Clientset
+	err                error
+	Namespace          string
+	ContainersToIgnore string
 )
 
 func init() {

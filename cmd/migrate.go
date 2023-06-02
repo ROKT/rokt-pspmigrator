@@ -49,7 +49,7 @@ var MigrateCmd = &cobra.Command{
 		fmt.Println("Checking if any pods are being mutated by a PSP object")
 		mutatedPods := make([]v1.Pod, 0)
 		for _, pod := range pods.Items {
-			mutated, _, err := pspmigrator.IsPodBeingMutatedByPSP(&pod, clientset)
+			mutated, _, err := pspmigrator.IsPodBeingMutatedByPSP(&pod, clientset, "")
 			if err != nil {
 				log.Fatalln(err)
 			}

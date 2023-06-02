@@ -53,7 +53,7 @@ func initMutating() {
 				log.Fatalln(err.Error())
 				os.Exit(1)
 			} else {
-				mutated, diff, err := pspmigrator.IsPodBeingMutatedByPSP(podObj, clientset)
+				mutated, diff, err := pspmigrator.IsPodBeingMutatedByPSP(podObj, clientset, ContainersToIgnore)
 				if err != nil {
 					log.Println(err)
 					os.Exit(1)
@@ -80,6 +80,7 @@ func initMutating() {
 	}
 
 	podCmd.Flags().StringVarP(&Namespace, "namespace", "n", "", "K8s namespace (required)")
+	podCmd.Flags().StringVarP(&ContainersToIgnore, "containersToIgnore", "c", "", "comma-separated list of containers to ignore in the live pod spec at comparison time")
 	podCmd.MarkFlagRequired("namespace")
 
 	podsCmd := cobra.Command{
@@ -95,7 +96,7 @@ func initMutating() {
 			fmt.Printf("There are %d pods in the cluster\n", len(pods.Items))
 			for _, pod := range pods.Items {
 				if pspName, ok := pod.ObjectMeta.Annotations["kubernetes.io/psp"]; ok {
-					mutated, _, err := pspmigrator.IsPodBeingMutatedByPSP(&pod, clientset)
+					mutated, _, err := pspmigrator.IsPodBeingMutatedByPSP(&pod, clientset, "")
 					if err != nil {
 						log.Println("error occured checking if pod is mutated:", err)
 					}
