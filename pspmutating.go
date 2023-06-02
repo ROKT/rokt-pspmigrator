@@ -77,10 +77,14 @@ func FetchControllerObj(kind, name, namespace string, clientset *kubernetes.Clie
 	// for example, Deployments would fall under the ReplicaSet case so no need to have a case
 	// statement for Deployments.
 	switch kind {
-	case "ReplicaSet":
+	case "ReplicaSet": // deployments too
 		return clientset.AppsV1().ReplicaSets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	case "DaemonSet":
 		return clientset.AppsV1().DaemonSets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	case "Job": // cronjobs too
+		return clientset.BatchV1().Jobs(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	case "StatefulSet":
+		return clientset.AppsV1().StatefulSets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	default:
 		return nil, fmt.Errorf("unsupported controller kind %s", kind)
 	}
